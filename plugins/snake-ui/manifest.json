@@ -1,0 +1,15 @@
+{
+  "author": "alisher",
+  "category": "games",
+  "dependencies": [],
+  "description": "Snake game — logos-dev-boost pilot",
+  "icon": "",
+  "main": {
+    "linux-amd64": "Main.qml"
+  },
+  "manifestVersion": "0.1.0",
+  "name": "snake-ui",
+  "capabilities": [],
+  "type": "ui_qml",
+  "version": "1.0.0"
+}

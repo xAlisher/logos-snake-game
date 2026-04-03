@@ -100,3 +100,30 @@ target_include_directories(my_plugin PRIVATE
     ${LOGOS_MODULE_ROOT}/include/module_lib
 )
 ```
+
+## Finding #9: Scaffold QML References Nonexistent Backend
+**Severity:** Medium
+**Step:** Scaffold
+**Details:** Generated Main.qml references `backend.items` and `backend.addItem()`, which come from the `SnakeGameBackend` class. However, the backend class is part of the IComponent pattern (Finding #3) which doesn't exist in the SDK. If you remove the backend (because IComponent doesn't exist), the QML breaks.
+**Recommendation:** Fix scaffold to generate working QML that doesn't depend on the broken IComponent pattern.
+
+## Finding #10: Pure QML UI Plugin Pattern Not Documented
+**Severity:** High
+**Step:** Implementation
+**Details:** logos-dev-boost documents two patterns: universal module (core) and UI app (IComponent). But in practice, Basecamp uses a THIRD pattern: pure QML UI plugins. These are:
+- manifest.json + metadata.json + Main.qml (no C++)
+- Type: `ui_qml` in manifest
+- Loaded from `LogosBasecamp/plugins/<name>/`
+- No IComponent, no QWidget, no C++ backend needed
+
+This is how keycard-ui, notes_ui, auth_showcase-ui all work. logos-dev-boost doesn't document or scaffold this pattern at all.
+**Recommendation:** Add `--type qml-plugin` scaffold option for pure QML UI modules.
+
+## Finding #11: Deploy Target Confusion
+**Severity:** Medium
+**Step:** Implementation
+**Details:** logos-dev-boost scaffold suggests deploying to `~/.local/share/Logos/LogosBasecampDev/plugins/`. In practice:
+- Core modules: `LogosApp/modules/<name>/`
+- UI QML plugins: `LogosBasecamp/plugins/<name>/`
+- NOT `LogosBasecampDev` (this doesn't exist or isn't used)
+**Recommendation:** Fix deploy path in scaffold output.

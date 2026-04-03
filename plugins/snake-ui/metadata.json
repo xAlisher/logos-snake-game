@@ -1,0 +1,13 @@
+{
+  "name": "snake-ui",
+  "version": "1.0.0",
+  "description": "Snake game — logos-dev-boost pilot",
+  "author": "alisher",
+  "type": "ui_qml",
+  "pluginType": "qml",
+  "main": "Main.qml",
+  "dependencies": [],
+  "category": "games",
+  "capabilities": [],
+  "icon": ""
+}
