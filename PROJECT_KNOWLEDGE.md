@@ -133,6 +133,61 @@ This is how keycard-ui, notes_ui, auth_showcase-ui all work. logos-dev-boost doe
 **Assessment:** The LGX workflow doesn't cover the most common UI plugin deployment pattern.
 **Recommendation:** Document QML plugin deployment as a separate pattern. Consider LGX support for QML bundles.
 
+## Finding #14: Code Generator Pipeline Works
+**Severity:** Positive
+**Step:** Build (high_score universal module)
+**Details:** The full pipeline works:
+1. `logos-cpp-generator --from-header` parses pure C++ impl header
+2. Generates `high_score_qt_glue.h` (Qt plugin class, ProviderObject) and `high_score_dispatch.cpp` (method dispatch)
+3. CMake builds with generated files
+4. Output: `high_score_plugin.so` (72KB)
+**Friction:** Must copy `metadata.json` to `generated_code/` directory because `Q_PLUGIN_METADATA(FILE "metadata.json")` resolves relative to the glue header location.
+**Assessment:** The universal interface pattern is viable. This is the path that logos-dev-boost documents well.
+
+## Finding #15: Runtime Requires Compatible Basecamp Version
+**Severity:** High
+**Step:** Build / Deploy
+**Details:** The generated glue inherits `LogosProviderBase` from logos-cpp-sdk. At runtime, Basecamp's `logos_host` must provide this symbol. The SDK version pinned by `logos-module-builder` must match the Basecamp version. Our current Basecamp AppImage (March 22, 2026) may not have `LogosProviderBase` — it uses the older `PluginInterface` pattern.
+**Implication:** Universal interface modules require a newer Basecamp than what we have. Need to update the AppImage to test.
+**Recommendation:** Document minimum Basecamp version for universal modules.
+
+## Finding #16: metadata.json Location for Generated Glue
+**Severity:** Medium
+**Step:** Build
+**Details:** The generated `high_score_qt_glue.h` contains `Q_PLUGIN_METADATA(IID "..." FILE "metadata.json")`. moc resolves this relative to the header's directory (`generated_code/`), not the project root. Must copy metadata.json to `generated_code/` in preConfigure.
+**Recommendation:** Code generator should use absolute path or the builder should handle this automatically.
+
+## Finding #17: Latest Basecamp Doesn't Discover File-Dropped Modules
+**Severity:** High
+**Step:** Deploy / Test
+**Details:** Latest Basecamp (pre-release-39804ed-111, April 2) does not discover modules installed by copying files to `LogosApp/modules/` or `LogosBasecamp/modules/`. Only `package_manager` and `capability_module` load (bundled with AppImage). The old Basecamp (March 22) discovers file-dropped modules fine.
+**Implication:** Latest Basecamp likely requires LGX package installation via `lgpm` or `package_manager`. Direct file copy is no longer supported.
+**Assessment:** This is the biggest gap in our workflow — we've been deploying by file copy. Need to learn LGX packaging.
+
+## Finding #19: LGX Build Works via nix build .#lgx
+**Severity:** Positive
+**Step:** LGX Packaging (Step 6)
+**Details:** `logos-module-builder` provides `packages.x86_64-linux.lgx` output automatically. Running `nix build .#lgx` produces a proper `.lgx` file (gzipped, with variant metadata). Also provides `.#install` which runs `lgpm` to install from the LGX.
+**Assessment:** LGX packaging is well-integrated into the Nix build system — no separate `lgx` CLI needed.
+
+## Finding #20: Nix Store Read-Only Permissions Break Install Copy
+**Severity:** Low
+**Step:** Deploy
+**Details:** Files in nix store are read-only. Copying from `nix build .#install` output to data directory fails with `Permission denied` if target files already exist. Must `rm -rf` target first then copy, or use `chmod` after copy.
+
+## Finding #21: Latest Basecamp Doesn't Accept File-Dropped Modules (Confirmed)
+**Severity:** Critical for evaluation
+**Step:** Deploy / Test
+**Details:** Tested with both file copy AND lgpm-installed modules. Latest Basecamp (pre-release-39804ed-111) does NOT discover ANY user-installed modules in `LogosBasecamp/modules/`. Only bundled modules (package_manager, capability_module) load. This blocks testing the universal interface module in runtime.
+**Assessment:** The latest Basecamp has a fundamentally different module discovery mechanism. We cannot test the high_score module without understanding how the new Basecamp discovers modules (possibly requires `package_manager` API call, or different data directory).
+**Action needed:** Investigate logos-co/logos-basecamp source for module discovery changes.
+
+## Finding #18: Hundreds of Stale AppImage Mount Points
+**Severity:** Medium
+**Step:** Operations
+**Details:** `/tmp/.mount_logos-*` directories accumulate from crashed AppImage processes. Found 200+ stale mounts. These consume disk space and clutter temp directory.
+**Recommendation:** Clean up script: `rm -rf /tmp/.mount_logos-*` (when no Logos is running)
+
 ## Finding #11: Deploy Target Confusion
 **Severity:** Medium
 **Step:** Implementation
