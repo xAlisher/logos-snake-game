@@ -117,6 +117,45 @@ logos-dev-boost's scaffold and documentation only cover pattern 1 (partially cor
 
 ### Consider
 9. **LGX for QML bundles** — package QML plugins for distribution
+10. **`logos_module()` CMake macro** — mentioned in docs but not in SDK; would eliminate include path friction
+
+### Investigate
+11. **Latest Basecamp module discovery** — pre-release-39804ed-111 (April 2) doesn't discover user-installed modules via file copy. Only bundled modules load. Need to understand new discovery mechanism.
+12. **PluginInterface vs LogosProviderBase** — old Basecamp uses PluginInterface, universal interface generates LogosProviderBase. Compatibility gap between old and new architectures.
+
+---
+
+## Step 8: High Score Universal Module (Additional Testing)
+
+### What Worked
+- Pure C++ impl → `logos-cpp-generator` → Qt glue + dispatch (**code generator works**)
+- `nix build` with `preConfigure` runs generator automatically
+- `nix build .#lgx` produces proper LGX package (integrated into builder)
+- `nix build .#install` runs `lgpm` for installation
+- Full pipeline: `high_score_impl.h` → generated glue → compiled .so → LGX → lgpm install
+
+### What Didn't Work
+- Latest Basecamp doesn't load the module (file-dropped or lgpm-installed)
+- `LogosProviderBase` undefined symbol prevents header extraction (expected at runtime)
+- Cannot test runtime behavior of universal interface module
+
+### Friction Points
+- Must copy `metadata.json` to `generated_code/` for `Q_PLUGIN_METADATA`
+- Nix store files are read-only — need chmod after copy
+- High-score module is an embedded git repo (not a submodule) — messy
+
+---
+
+## Final Findings Count
+
+| Severity | Count | Examples |
+|----------|-------|---------|
+| Critical | 2 | IComponent doesn't exist (#3), latest Basecamp doesn't discover modules (#21) |
+| High | 3 | Missing build files (#2), QML pattern undocumented (#10), Basecamp compat (#15) |
+| Medium | 5 | Include paths (#4), lib prefix (#5), deploy path (#11), metadata location (#16), stale mounts (#18) |
+| Positive | 3 | AI context files (#6), Nix builder (#7), code generator (#14) |
+| Info/Low | 4 | LogosAPI warning (#8), logoscore N/A (#12), LGX N/A for QML (#13), permissions (#20) |
+| **Total** | **21** |
 10. **logos_module() CMake macro** — mentioned in docs but not found in SDK; would eliminate include path friction
 
 ---
@@ -143,6 +182,23 @@ logos-dev-boost's scaffold and documentation only cover pattern 1 (partially cor
 
 ## Conclusion
 
-logos-dev-boost is a strong foundation with the right architecture (three-layer AI integration). The AI context generation is production-ready and should be adopted. The scaffolding and build setup need significant fixes before they can be used reliably for UI development. The core module (universal interface) path appears more mature than the UI path.
+### Split Outcome
 
-**Our recommendation:** Adopt AI context patterns now. File upstream issues for findings #1-5 and #10-11. Wait for scaffold fixes before recommending logos-dev-boost for new UI development.
+**logos-dev-boost tooling** got meaningful validation:
+- Code generator pipeline works end-to-end
+- Nix build infrastructure is solid
+- LGX packaging is well-integrated
+- AI context generation is excellent
+
+**Basecamp host platform** blocks full end-to-end validation:
+- Latest Basecamp (April 2) doesn't discover user-installed modules
+- This is a host discovery regression, not a pilot module problem
+- This blocker affects **all** external module development, not just snake game
+
+### Recommendation
+
+1. **Adopt now:** AI context generation (AGENTS.md, CLAUDE.md, skills)
+2. **File upstream:** logos-dev-boost scaffold bugs (IComponent, missing build files)
+3. **File upstream:** Basecamp module discovery regression (blocks all external module DX)
+4. **Wait:** Full universal interface adoption until Basecamp supports user-installed modules again
+5. **Continue using:** Old Basecamp (March 22) + PluginInterface pattern for keycard-basecamp
