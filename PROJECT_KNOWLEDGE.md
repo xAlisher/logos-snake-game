@@ -175,6 +175,12 @@ This is how keycard-ui, notes_ui, auth_showcase-ui all work. logos-dev-boost doe
 **Step:** Deploy
 **Details:** Files in nix store are read-only. Copying from `nix build .#install` output to data directory fails with `Permission denied` if target files already exist. Must `rm -rf` target first then copy, or use `chmod` after copy.
 
+## Finding #22: Our Working AppImage Is NOT from logos-co/logos-basecamp Releases
+**Severity:** Critical (understanding)
+**Step:** Investigation
+**Details:** Binary search across ALL logos-co/logos-basecamp releases (#80 through #111, March 22 to April 2) shows NONE of them discover file-dropped modules. Only bundled package_manager and capability_module load. Our working `~/logos-app/logos-app.AppImage` (named differently — `logos-app` not `logos-basecamp`) is from a different source (possibly a custom/dev build). This means the logos-co/logos-basecamp public releases have NEVER supported the file-drop pattern we use.
+**Implication:** We need to find the source of our working AppImage, or use LGX/package_manager API for the public releases.
+
 ## Finding #21: Latest Basecamp Doesn't Accept File-Dropped Modules (Confirmed)
 **Severity:** Critical for evaluation
 **Step:** Deploy / Test
