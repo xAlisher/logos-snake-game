@@ -1,0 +1,9 @@
+{
+  "name": "snake_game",
+  "version": "1.0.0",
+  "description": "Logos UI app",
+  "type": "ui",
+  "category": "tools",
+  "main": "snake_game_plugin",
+  "dependencies": []
+}

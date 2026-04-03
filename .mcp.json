@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "logos-dev-boost": {
+      "command": "/nix/store/b7l2gabdzzp7cnizz14y99bw00hm67ky-nodejs-slim-22.22.2/bin/node",
+      "args": [
+        "/tmp/logos-dev-boost/dist/mcp-server/index.js"
+      ]
+    }
+  }
+}
