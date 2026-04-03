@@ -4,201 +4,417 @@
 **Date:** 2026-04-03
 **Author:** Fergie (implementer agent) + Senty (security reviewer)
 **Repo:** [xAlisher/logos-snake-game](https://github.com/xAlisher/logos-snake-game)
+**Findings:** 25 total (documented in PROJECT_KNOWLEDGE.md)
 
 ---
 
-## Executive Summary
+## Critical Top-Level Finding
 
-logos-dev-boost is a promising AI-assisted development accelerator with **excellent documentation generation** but **significant gaps in scaffolding and build setup**. The strongest feature is the AI context file generation (AGENTS.md, CLAUDE.md, skills) which gives AI agents accurate Logos knowledge. The weakest areas are the UI app scaffold (generates unbuildable code) and missing build configuration files.
+There is a **three-way incompatibility** between the tooling, the public releases, and the working runtime:
 
-**Verdict:** Adopt selectively. Use the AI context generation and documentation patterns. Do not rely on the scaffold for UI apps until the IComponent/PluginInterface mismatch is fixed upstream.
+| | **logos-dev-boost** (tooling) | **logos-co/logos-basecamp** (GitHub releases) | **Our logos-app** (local Nix build) |
+|---|---|---|---|
+| **Plugin interface** | `LogosProviderBase` (universal/codegen) | Unknown (can't test) | `PluginInterface` (legacy) |
+| **Module discovery** | Assumes file-drop or LGX | Neither works | File-drop works |
+| **Binary name** | N/A | `LogosBasecamp` | `LogosApp` |
 
----
-
-## Step-by-Step Walkthrough
-
-### Step 1: Scaffold (`logos-dev-boost init`)
-
-**Command:** `logos-dev-boost init snake_game --type ui-app`
-
-| Aspect | Result | Notes |
-|--------|--------|-------|
-| CLI execution | FAIL then PASS | Requires Node 20.11+, system Node 18 fails |
-| Source files generated | PASS | Plugin.h/cpp, Backend.h/cpp, Main.qml |
-| AI context files | EXCELLENT | AGENTS.md (2800+ lines), CLAUDE.md, 8 skills |
-| MCP config | PASS | .mcp.json generated correctly |
-| Build config (flake.nix) | MISSING | Not generated — must create manually |
-| Build config (CMakeLists.txt) | MISSING | Not generated — must create manually |
-| Buildable out of the box | FAIL | Generated code references IComponent which doesn't exist in SDK |
-
-**Critical:** The UI app scaffold generates `#include "IComponent.h"` but the SDK only has `PluginInterface`. The generated code cannot compile.
-
-### Step 2: AI Tooling (`logos-dev-boost install`)
-
-Not tested separately — install runs automatically during init. The generated files are comprehensive and accurate. The 8 Claude Code skills cover all common tasks (create module, testing, packaging, etc.).
-
-**Assessment:** This is the best feature of logos-dev-boost. AI agents get accurate Logos SDK knowledge without hallucinating APIs.
-
-### Step 3: Nix Build
-
-**4 manual fixes required after scaffold:**
-
-1. Create `flake.nix` from scratch (not generated)
-2. Create `CMakeLists.txt` from scratch (not generated)
-3. Add multiple include paths for SDK headers (`LOGOS_CPP_SDK_ROOT/include/cpp`, `LOGOS_MODULE_ROOT/include`)
-4. Set `PREFIX ""` on CMake target (builder expects no `lib` prefix)
-
-Once fixed, `logos-module-builder.lib.mkLogosModule` works well — resolves Qt 6, SDK, and all dependencies correctly.
-
-### Step 4: Implementation
-
-Used the **pure QML UI plugin pattern** (manifest.json + metadata.json + Main.qml) — the same pattern used by keycard-ui, notes_ui, and auth_showcase-ui in production. logos-dev-boost does not document or scaffold this pattern at all.
-
-Snake game works in Basecamp: arrow keys to move, space to start/restart, score tracking, wrap-around walls, self-collision detection.
-
-### Step 5: Testing (logoscore)
-
-**Not applicable.** logoscore tests universal C++ module methods. Pure QML plugins have no C++ dispatch table. logos-dev-boost's testing documentation only covers core modules.
-
-### Step 6: LGX Packaging
-
-**Not applicable.** LGX packages compiled .so/.dylib files. Pure QML plugins are just files copied to the plugins directory. No compilation step, no platform variants.
+**Nobody can run a universal interface module end-to-end right now.** The tooling and runtime are out of sync.
 
 ---
 
-## Findings Summary
+## Tool-by-Tool Breakdown
 
-| # | Severity | Finding |
-|---|----------|---------|
-| 1 | Blocker | Node 18 incompatible — requires Node 20.11+ |
-| 2 | High | Missing flake.nix and CMakeLists.txt in scaffold |
-| 3 | **Critical** | IComponent interface doesn't exist in SDK — scaffold produces unbuildable code |
-| 4 | Medium | CMake include path discovery requires 4 separate paths |
-| 5 | Medium | Library prefix mismatch (lib prefix vs no prefix) |
-| 6 | **Positive** | AI context files (AGENTS.md, CLAUDE.md) are excellent |
-| 7 | **Positive** | logos-module-builder Nix infrastructure works well |
-| 8 | Info | LogosAPI undefined symbol warning — expected for stub modules |
-| 9 | Medium | Scaffold QML references nonexistent backend |
-| 10 | High | Pure QML UI plugin pattern not documented |
-| 11 | Medium | Deploy target path wrong in scaffold output (LogosBasecampDev doesn't exist) |
-| 12 | Info | logoscore not applicable for QML plugins |
-| 13 | Info | LGX packaging not applicable for QML plugins |
+### 1. CLI: `logos-dev-boost init`
+
+**What it does:** Scaffolds a new Logos module or UI app project.
+
+| Aspect | Verdict | Details |
+|--------|---------|---------|
+| CLI works | PARTIAL | Requires Node 20.11+. Fails silently on Node 18 (`import.meta.dirname` undefined). No version check. |
+| Module scaffold (`--type module`) | NOT TESTED | We tested UI app first, then built module manually |
+| UI app scaffold (`--type ui-app`) | BROKEN | Generates `IComponent` interface that doesn't exist in SDK. Unbuildable code. |
+| Generated source files | BROKEN | `SnakeGamePlugin.h` includes `"IComponent.h"` — SDK has `PluginInterface` at `<module_lib/interface.h>` |
+| Generated QML | BROKEN | References `backend.items` and `backend.addItem()` from the IComponent pattern that doesn't exist |
+| flake.nix generation | MISSING | Not generated. Must create manually. |
+| CMakeLists.txt generation | MISSING | Not generated. Must create manually. |
+| Deploy path suggestion | WRONG | Suggests `LogosBasecampDev` which doesn't exist. Real paths: `LogosApp/modules/` or `LogosBasecamp/plugins/` |
+
+**Useful?** No for UI apps — produces unbuildable code. Could be useful for universal modules if it generated build files.
+
+**Recommendation:** Fix IComponent → PluginInterface. Generate flake.nix and CMakeLists.txt. Add `--type qml-plugin` for pure QML modules. Add Node version check.
 
 ---
 
-## Architecture Mismatch
+### 2. CLI: `logos-dev-boost install`
 
-logos-dev-boost documents two component types:
-1. **Universal Module** (core, C++) — well-documented, works
-2. **UI App** (IComponent, QWidget) — documented but **doesn't exist in SDK**
+**What it does:** Configures AI tools for an existing project. Auto-detects IDE, generates context files.
 
-In practice, Basecamp has THREE patterns:
-1. **Core Module** (PluginInterface, C++) — what universal modules actually are
-2. **Compiled UI Plugin** (PluginInterface, C++ + QML) — like keycard-ui's debug panel
-3. **Pure QML UI Plugin** (manifest.json + metadata.json + QML files) — most common for UIs
+| Aspect | Verdict | Details |
+|--------|---------|---------|
+| Runs automatically during init | WORKS | Integrated into scaffold flow |
+| IDE auto-detection | NOT TESTED STANDALONE | Only tested via init |
 
-logos-dev-boost's scaffold and documentation only cover pattern 1 (partially correct) and pattern 2 (with wrong interface). Pattern 3 (the most common) is completely absent.
+**Useful?** Not tested independently. Runs as part of init.
+
+**Recommendation:** Test standalone on existing project.
+
+---
+
+### 3. CLI: `logos-dev-boost generate`
+
+**What it does:** Regenerates AI context files (AGENTS.md, CLAUDE.md, cursor rules, llms.txt).
+
+| Aspect | Verdict | Details |
+|--------|---------|---------|
+| Standalone regeneration | NOT TESTED | Only tested via init auto-generation |
+
+**Useful?** Not tested independently.
+
+---
+
+### 4. Context File: AGENTS.md
+
+**What it does:** Always-loaded AI context file with compressed Logos SDK documentation.
+
+| Aspect | Verdict | Details |
+|--------|---------|---------|
+| Generated correctly | EXCELLENT | 2800+ lines of accurate Logos conventions |
+| Type mapping table | ACCURATE | C++ → LIDL → Qt mappings match SDK reality |
+| Code generator docs | ACCURATE | `--from-header` pipeline documented correctly |
+| Build commands | ACCURATE | `nix build`, `nix flake check`, `nix develop` all correct |
+| Plugin patterns | PARTIALLY WRONG | Documents IComponent (doesn't exist). Doesn't document pure QML pattern. |
+| Inter-module comm | ACCURATE | `LogosAPI::callModule()` pattern matches reality |
+
+**Useful?** YES — this is the strongest feature of logos-dev-boost. AI agents get accurate Logos knowledge immediately. The few inaccuracies (IComponent) are inherited from the scaffold bug.
+
+**Recommendation:** Fix IComponent references. Add pure QML UI plugin documentation. Otherwise excellent — adopt now.
+
+---
+
+### 5. Context File: CLAUDE.md
+
+**What it does:** Claude Code-specific context file that imports AGENTS.md content and adds skill references.
+
+| Aspect | Verdict | Details |
+|--------|---------|---------|
+| Generated correctly | WORKS | Imports all AGENTS.md content plus skill list |
+| Skill references | WORKS | Lists all 8 skills with activation triggers |
+| MCP server reference | WORKS | Documents available MCP tools |
+
+**Useful?** YES — direct Claude Code integration works well.
+
+**Recommendation:** Adopt as-is. Fix inherits from AGENTS.md fixes.
+
+---
+
+### 6. MCP Server: `logos_project_info`
+
+**What it does:** Analyzes project metadata without running Nix evaluation.
+
+| Aspect | Verdict | Details |
+|--------|---------|---------|
+| Project type detection | WORKS | Correctly identified `ui-app` type |
+| Metadata parsing | WORKS | Returns name, version, dependencies, build targets |
+| Flake detection | WORKS | Detects flake.nix presence |
+| Nix input listing | WORKS | Lists flake inputs correctly |
+
+**Useful?** YES — quick project inspection without slow Nix evaluation.
+
+**Recommendation:** Adopt. Works well.
+
+---
+
+### 7. MCP Server: `logos_search_docs`
+
+**What it does:** Full-text fuzzy search over bundled documentation.
+
+| Aspect | Verdict | Details |
+|--------|---------|---------|
+| Search functionality | NOT TESTED | Did not invoke via MCP protocol |
+
+**Useful?** Not tested.
+
+---
+
+### 8. MCP Server: `logos_api_reference`
+
+**What it does:** Returns type system and LogosAPI reference.
+
+| Aspect | Verdict | Details |
+|--------|---------|---------|
+| API reference | NOT TESTED | Did not invoke via MCP protocol |
+
+**Useful?** Not tested.
+
+---
+
+### 9. MCP Server: `logos_build_help`
+
+**What it does:** Context-aware build commands and troubleshooting.
+
+| Aspect | Verdict | Details |
+|--------|---------|---------|
+| Package commands | WORKS | Correctly suggested `lgx create`, `lgx add`, `lgpm install` |
+| Build commands | WORKS | Correct `nix build` commands |
+| Troubleshooting | NOT TESTED | Did not test with build errors |
+
+**Useful?** YES — gave correct LGX packaging workflow.
+
+**Recommendation:** Adopt. Test troubleshooting path.
+
+---
+
+### 10. MCP Server: `logos_scaffold`
+
+**What it does:** Same as CLI init, but via MCP tool.
+
+| Aspect | Verdict | Details |
+|--------|---------|---------|
+| Functionality | NOT TESTED SEPARATELY | CLI init was used directly |
+
+**Useful?** Not tested separately from CLI.
+
+---
+
+### 11. Skill: `create-universal-module`
+
+**What it does:** Step-by-step guide for creating a universal C++ module.
+
+| Aspect | Verdict | Details |
+|--------|---------|---------|
+| Impl header pattern | ACCURATE | Pure C++ types, naming conventions match |
+| Type mapping | ACCURATE | Matches code generator's actual behavior |
+| Build pipeline | ACCURATE | preConfigure + logos-cpp-generator works as documented |
+| Testing pattern | PARTIALLY TESTED | logoscore commands are correct but runtime crashes (incompatibility) |
+
+**Useful?** YES — guided the high_score module creation successfully. Build pipeline works exactly as described.
+
+**Recommendation:** Adopt. Best skill for module development.
+
+---
+
+### 12. Skill: `create-ui-app`
+
+**What it does:** Guide for creating Basecamp UI app with IComponent + QML.
+
+| Aspect | Verdict | Details |
+|--------|---------|---------|
+| IComponent pattern | BROKEN | IComponent doesn't exist in SDK |
+| Backend class pattern | BROKEN | Depends on IComponent |
+| QML conventions | PARTIALLY USEFUL | Layout patterns are fine, but theme imports (Logos.Theme, Logos.Controls) only exist in latest Basecamp |
+
+**Useful?** NO — based on non-existent interface. Cannot follow this skill.
+
+**Recommendation:** Rewrite for PluginInterface or pure QML pattern.
+
+---
+
+### 13. Skill: `package-lgx`
+
+**What it does:** Guide for LGX packaging and distribution.
+
+| Aspect | Verdict | Details |
+|--------|---------|---------|
+| Manual lgx commands | NOT TESTED | Used `nix build .#lgx` instead (built-in to builder) |
+| `nix build .#lgx` | WORKS | Produces proper .lgx file automatically |
+| `nix build .#install` | WORKS | Runs lgpm, installs to nix store path |
+| Platform variant naming | BUG | Builder produces `linux-amd64-dev` but runtime expects `linux-amd64` |
+
+**Useful?** PARTIALLY — the Nix-integrated path works better than the manual lgx commands documented.
+
+**Recommendation:** Document `nix build .#lgx` as primary path. Fix variant naming.
+
+---
+
+### 14. Skill: `nix-flake-setup`
+
+**What it does:** Guide for configuring Nix flake.nix for Logos modules.
+
+| Aspect | Verdict | Details |
+|--------|---------|---------|
+| Minimal flake template | WORKS | `mkLogosModule` with `src`, `configFile`, `flakeInputs` works |
+| preConfigure for codegen | WORKS | Code generator runs correctly in this hook |
+| Build commands | WORKS | `nix build`, `nix develop` correct |
+| CMake variables | NOT DOCUMENTED | Doesn't mention `LOGOS_CPP_SDK_ROOT`, `LOGOS_MODULE_ROOT` — must discover manually |
+
+**Useful?** YES — got the flake working with this guide. Missing CMake variable documentation was the main friction.
+
+**Recommendation:** Add CMake variable reference. Document `set_target_properties(PREFIX "")` requirement.
+
+---
+
+### 15. Skill: `testing-modules`
+
+**What it does:** Guide for unit and integration testing.
+
+| Aspect | Verdict | Details |
+|--------|---------|---------|
+| Unit test pattern | ACCURATE | Direct impl class instantiation works |
+| logoscore commands | ACCURATE | Correct flags and syntax |
+| logoscore runtime | CRASHES | Module loads but `LogosProviderBase` incompatible with runtime |
+| QML testing | NOT COVERED | No guidance for testing QML UI plugins |
+
+**Useful?** PARTIALLY — patterns are correct but runtime incompatibility prevents actual testing.
+
+**Recommendation:** Add QML testing guidance. Fix runtime compatibility first.
+
+---
+
+### 16. Skill: `inter-module-comm`
+
+**What it does:** Guide for inter-module communication via LogosAPI.
+
+| Aspect | Verdict | Details |
+|--------|---------|---------|
+| LogosAPI patterns | NOT TESTED AT RUNTIME | Couldn't run module to test inter-module calls |
+| Documentation | APPEARS ACCURATE | `logos.callModule()` QML pattern matches our keycard-basecamp usage |
+
+**Useful?** Not tested. Documentation looks correct based on our keycard experience.
+
+---
+
+### 17. Skill: `wrap-external-lib`
+
+**What it does:** Guide for wrapping external C/C++ libraries as Logos modules.
+
+| Aspect | Verdict | Details |
+|--------|---------|---------|
+| Functionality | NOT TESTED | Not applicable to snake game pilot |
+
+**Useful?** Not tested.
+
+---
+
+### 18. Skill: `add-to-workspace`
+
+**What it does:** Guide for adding modules to logos-workspace multi-repo setup.
+
+| Aspect | Verdict | Details |
+|--------|---------|---------|
+| Functionality | NOT TESTED | Not applicable to standalone pilot |
+
+**Useful?** Not tested.
+
+---
+
+### 19. Guidelines (7 files in AGENTS.md)
+
+| Guideline | Verdict | Details |
+|-----------|---------|---------|
+| `core.md` — Two component types | PARTIALLY WRONG | Documents IComponent that doesn't exist. Doesn't cover pure QML pattern. |
+| `universal-module.md` — Pure C++ pattern | ACCURATE | Type mapping, naming, build pipeline all correct |
+| `ui-app.md` — IComponent pattern | BROKEN | Entire guideline based on non-existent interface |
+| `nix-build.md` — Flake structure | ACCURATE | Build commands, override patterns correct |
+| `testing.md` — Unit/integration tests | ACCURATE | Patterns correct, runtime incompatibility separate issue |
+| `metadata-json.md` — Full schema | ACCURATE | Field descriptions match reality |
+| `codegen.md` — Code generator | ACCURATE | Pipeline, type mapping, LIDL format all correct |
+
+---
+
+### 20. Code Generator: `logos-cpp-generator`
+
+**What it does:** Parses pure C++ impl header, generates Qt plugin glue and method dispatch.
+
+| Aspect | Verdict | Details |
+|--------|---------|---------|
+| Header parsing | WORKS | Correctly parsed `HighScoreImpl` class with 4 methods |
+| Qt glue generation | WORKS | Produced `high_score_qt_glue.h` with proper Q_OBJECT, Q_PLUGIN_METADATA |
+| Dispatch generation | WORKS | Produced `high_score_dispatch.cpp` with method dispatch table |
+| Type mapping | WORKS | `std::string` → `QString`, `int64_t` → `int` correctly mapped |
+| Nix integration | WORKS | Runs in `preConfigure` hook as documented |
+| metadata.json location | BUG | Q_PLUGIN_METADATA references metadata.json relative to generated file — must copy |
+
+**Useful?** YES — the code generator works exactly as documented. This is a solid tool.
+
+**Recommendation:** Fix metadata.json path resolution. Otherwise adopt.
+
+---
+
+### 21. Build System: `logos-module-builder`
+
+**What it does:** Nix flake helper that wraps CMake/Ninja build with Logos SDK dependencies.
+
+| Aspect | Verdict | Details |
+|--------|---------|---------|
+| `mkLogosModule` | WORKS | Resolves Qt 6, SDK, module headers correctly |
+| CMake variable passing | WORKS | `LOGOS_CPP_SDK_ROOT`, `LOGOS_MODULE_ROOT` passed correctly |
+| LGX output (`nix build .#lgx`) | WORKS | Integrated LGX packaging |
+| Install output (`nix build .#install`) | WORKS | Integrated lgpm installation |
+| Dev shell | NOT TESTED | Did not use `nix develop` |
+| Platform variant naming | BUG | Produces `linux-amd64-dev` instead of `linux-amd64` |
+
+**Useful?** YES — solid build infrastructure once you know the CMake variables.
+
+**Recommendation:** Document CMake variables. Fix variant naming. Add `logos_module()` CMake macro.
+
+---
+
+## Summary by Category
+
+### What Worked Well
+1. **AI context generation** (AGENTS.md, CLAUDE.md) — comprehensive, accurate, immediately useful
+2. **Code generator** (`logos-cpp-generator`) — full pipeline works end-to-end
+3. **Nix build infrastructure** (`logos-module-builder`) — solid dependency resolution
+4. **LGX packaging** — integrated into Nix build, produces proper packages
+5. **Claude Code skills** — 8 task-specific guides, well-written
+6. **MCP project-info tool** — quick project inspection
+7. **Universal module documentation** — type mapping, naming, pipeline all correct
+
+### What Didn't Work
+1. **UI app scaffold** — generates code using non-existent `IComponent` interface
+2. **Missing build files** — no flake.nix or CMakeLists.txt generated
+3. **Runtime incompatibility** — `LogosProviderBase` (codegen) vs `PluginInterface` (runtime)
+4. **Basecamp module discovery** — all GitHub releases reject user-installed modules
+5. **Platform variant naming** — `-dev` suffix breaks module discovery
+6. **Deploy path** — scaffold suggests non-existent directory
+
+### What Was Not Tested
+1. `logos-dev-boost install` (standalone)
+2. `logos-dev-boost generate` (standalone)
+3. MCP `logos_search_docs` tool
+4. MCP `logos_api_reference` tool
+5. MCP `logos_scaffold` tool (used CLI instead)
+6. Skill: `wrap-external-lib`
+7. Skill: `add-to-workspace`
+8. Skill: `inter-module-comm` (at runtime)
+9. `nix develop` shell
+10. Module scaffold (`--type module` without `--type ui-app`)
 
 ---
 
 ## Recommendations for Core Devs
 
-### Fix Now
-1. **Fix UI app scaffold** — replace IComponent with PluginInterface, or add pure QML template
-2. **Generate flake.nix and CMakeLists.txt** — scaffold should produce buildable projects
-3. **Add Node version check** — fail gracefully on Node < 20.11
-4. **Fix deploy path** — LogosBasecampDev → LogosBasecamp
+### Immediate Fixes (logos-dev-boost)
+1. **Replace IComponent with PluginInterface** in UI app scaffold and all documentation
+2. **Generate flake.nix and CMakeLists.txt** from scaffold
+3. **Add Node 20.11+ version check** in CLI
+4. **Fix deploy path** in scaffold output
+5. **Fix metadata.json path** in code generator Q_PLUGIN_METADATA
+6. **Fix platform variant naming** — no `-dev` suffix for standard builds
 
-### Add
-5. **Add `--type qml-plugin` scaffold** — for pure QML UI modules (most common pattern)
-6. **Document the three plugin patterns** — core module, compiled UI, pure QML UI
-7. **Add QML testing guidance** — logoscore doesn't cover UI testing
-8. **Document CMake include paths** — `LOGOS_CPP_SDK_ROOT`, `LOGOS_MODULE_ROOT` and what headers live where
+### Add to logos-dev-boost
+7. **`--type qml-plugin` scaffold** for pure QML UI modules (most common pattern in production)
+8. **Document three plugin patterns** — core module, compiled UI, pure QML UI
+9. **Document CMake variables** from `logos-module-builder` (`LOGOS_CPP_SDK_ROOT`, `LOGOS_MODULE_ROOT`)
+10. **Add QML testing guidance** — logoscore doesn't cover UI testing
+11. **Provide `logos_module()` CMake macro** — mentioned in docs but missing from SDK
 
-### Consider
-9. **LGX for QML bundles** — package QML plugins for distribution
-10. **`logos_module()` CMake macro** — mentioned in docs but not in SDK; would eliminate include path friction
+### Investigate (Basecamp platform)
+12. **Module discovery in public releases** — why don't GitHub releases discover user modules?
+13. **PluginInterface vs LogosProviderBase** — align tooling and runtime interfaces
+14. **logos-app vs logos-basecamp** — which is the canonical build? They behave differently.
 
-### Investigate
-11. **Latest Basecamp module discovery** — pre-release-39804ed-111 (April 2) doesn't discover user-installed modules via file copy. Only bundled modules load. Need to understand new discovery mechanism.
-12. **PluginInterface vs LogosProviderBase** — old Basecamp uses PluginInterface, universal interface generates LogosProviderBase. Compatibility gap between old and new architectures.
-
----
-
-## Step 8: High Score Universal Module (Additional Testing)
-
-### What Worked
-- Pure C++ impl → `logos-cpp-generator` → Qt glue + dispatch (**code generator works**)
-- `nix build` with `preConfigure` runs generator automatically
-- `nix build .#lgx` produces proper LGX package (integrated into builder)
-- `nix build .#install` runs `lgpm` for installation
-- Full pipeline: `high_score_impl.h` → generated glue → compiled .so → LGX → lgpm install
-
-### What Didn't Work
-- Latest Basecamp doesn't load the module (file-dropped or lgpm-installed)
-- `LogosProviderBase` undefined symbol prevents header extraction (expected at runtime)
-- Cannot test runtime behavior of universal interface module
-
-### Friction Points
-- Must copy `metadata.json` to `generated_code/` for `Q_PLUGIN_METADATA`
-- Nix store files are read-only — need chmod after copy
-- High-score module is an embedded git repo (not a submodule) — messy
-
----
-
-## Final Findings Count
-
-| Severity | Count | Examples |
-|----------|-------|---------|
-| Critical | 2 | IComponent doesn't exist (#3), latest Basecamp doesn't discover modules (#21) |
-| High | 3 | Missing build files (#2), QML pattern undocumented (#10), Basecamp compat (#15) |
-| Medium | 5 | Include paths (#4), lib prefix (#5), deploy path (#11), metadata location (#16), stale mounts (#18) |
-| Positive | 3 | AI context files (#6), Nix builder (#7), code generator (#14) |
-| Info/Low | 4 | LogosAPI warning (#8), logoscore N/A (#12), LGX N/A for QML (#13), permissions (#20) |
-| **Total** | **21** |
-10. **logos_module() CMake macro** — mentioned in docs but not found in SDK; would eliminate include path friction
-
----
-
-## What Works Well
-
-1. **AI context generation** — AGENTS.md/CLAUDE.md are comprehensive, accurate, and immediately useful
-2. **Claude Code skills** — 8 task-specific guides auto-installed
-3. **MCP server** — live project introspection tools
-4. **logos-module-builder** — solid Nix build infrastructure once configured
-5. **Documentation quality** — guidelines and skill content is well-written and accurate (for core modules)
-
----
-
-## What Needs Work
-
-1. **UI app scaffold is broken** — generates unbuildable code
-2. **Missing build files** — scaffold doesn't generate flake.nix or CMakeLists.txt
-3. **Documentation gap** — pure QML UI pattern (most common) is undocumented
-4. **Testing gap** — no guidance for QML/UI testing
-5. **Packaging gap** — LGX doesn't cover QML plugins
+### Adopt Now (for our projects)
+15. **AI context generation** — run `logos-dev-boost install` on keycard-basecamp for AGENTS.md
+16. **Nix flake patterns** — reference for nixpkgs unification, follows declarations
+17. **logoscore patterns** — for future integration testing (once runtime aligned)
 
 ---
 
 ## Conclusion
 
-### Split Outcome
+logos-dev-boost has the right architecture (three-layer AI integration) and strong individual components (code generator, Nix builder, AI context files). But the tooling targets a runtime interface (`LogosProviderBase`) that no available Basecamp can actually load, and the UI scaffold targets an interface (`IComponent`) that doesn't exist in the SDK.
 
-**logos-dev-boost tooling** got meaningful validation:
-- Code generator pipeline works end-to-end
-- Nix build infrastructure is solid
-- LGX packaging is well-integrated
-- AI context generation is excellent
+**The tooling and the runtime are out of sync.** This is not a logos-dev-boost-only problem — it reflects a broader platform transition where the new universal interface architecture exists in the tooling but hasn't landed in the runtime yet.
 
-**Basecamp host platform** blocks full end-to-end validation:
-- Latest Basecamp (April 2) doesn't discover user-installed modules
-- This is a host discovery regression, not a pilot module problem
-- This blocker affects **all** external module development, not just snake game
-
-### Recommendation
-
-1. **Adopt now:** AI context generation (AGENTS.md, CLAUDE.md, skills)
-2. **File upstream:** logos-dev-boost scaffold bugs (IComponent, missing build files)
-3. **File upstream:** Basecamp module discovery regression (blocks all external module DX)
-4. **Wait:** Full universal interface adoption until Basecamp supports user-installed modules again
-5. **Continue using:** Old Basecamp (March 22) + PluginInterface pattern for keycard-basecamp
+For keycard-basecamp: continue with `PluginInterface` + our local Nix build. Adopt AI context generation now. Re-evaluate universal interface when runtime and tooling align.
