@@ -119,6 +119,20 @@ target_include_directories(my_plugin PRIVATE
 This is how keycard-ui, notes_ui, auth_showcase-ui all work. logos-dev-boost doesn't document or scaffold this pattern at all.
 **Recommendation:** Add `--type qml-plugin` scaffold option for pure QML UI modules.
 
+## Finding #12: logoscore Not Applicable for QML Plugins
+**Severity:** Info
+**Step:** Testing (Step 5)
+**Details:** logoscore is designed for testing universal C++ modules via their method dispatch. Pure QML UI plugins have no C++ methods to test — they're visual components. logos-dev-boost's testing documentation only covers core module testing, not QML UI testing.
+**Assessment:** Testing gap for UI plugins. QML testing would need Qt's QML test framework or manual testing.
+**Recommendation:** Document that logoscore doesn't apply to QML-only plugins. Suggest QML testing alternatives.
+
+## Finding #13: LGX Packaging Not Applicable for QML Plugins
+**Severity:** Info
+**Step:** Packaging (Step 6)
+**Details:** LGX packaging (`lgx create/add/verify`) is designed for compiled modules (.so/.dylib). Pure QML plugins are just files (manifest.json + metadata.json + *.qml) copied to the plugins directory. No compilation, no platform variants.
+**Assessment:** The LGX workflow doesn't cover the most common UI plugin deployment pattern.
+**Recommendation:** Document QML plugin deployment as a separate pattern. Consider LGX support for QML bundles.
+
 ## Finding #11: Deploy Target Confusion
 **Severity:** Medium
 **Step:** Implementation
