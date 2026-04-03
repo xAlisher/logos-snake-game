@@ -2,6 +2,8 @@
 
 A Snake game module for Logos Basecamp, built as a **logos-dev-boost evaluation pilot**.
 
+![Snake game running in Logos Basecamp](screenshot.png)
+
 ## Goal
 
 Evaluate the full logos-dev-boost development toolchain by building a real module end-to-end:
