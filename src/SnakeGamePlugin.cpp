@@ -1,17 +1,27 @@
 #include "SnakeGamePlugin.h"
-#include "SnakeGameBackend.h"
-#include <QQuickWidget>
-#include <QQmlContext>
+#include <QJsonDocument>
+#include <QJsonObject>
 
-QWidget* SnakeGamePlugin::createWidget(LogosAPI* logosAPI) {
-    auto* widget = new QQuickWidget;
-    auto* backend = new SnakeGameBackend(logosAPI, widget);
-    widget->rootContext()->setContextProperty("backend", backend);
-    widget->setSource(QUrl("qrc:/qml/Main.qml"));
-    widget->setResizeMode(QQuickWidget::SizeRootObjectToView);
-    return widget;
+SnakeGamePlugin::SnakeGamePlugin(QObject* parent)
+    : QObject(parent)
+{
 }
 
-void SnakeGamePlugin::destroyWidget(QWidget* widget) {
-    delete widget;
+void SnakeGamePlugin::initLogos(LogosAPI* api)
+{
+    logosAPI = api;
+}
+
+QString SnakeGamePlugin::initialize()
+{
+    QJsonObject result;
+    result["initialized"] = true;
+    return QJsonDocument(result).toJson(QJsonDocument::Compact);
+}
+
+QString SnakeGamePlugin::getState()
+{
+    QJsonObject result;
+    result["state"] = "ready";
+    return QJsonDocument(result).toJson(QJsonDocument::Compact);
 }
