@@ -1,0 +1,6 @@
+{
+    "name": "high_score",
+    "version": "1.0.0",
+    "description": "High score storage for snake game",
+    "type": "core"
+}

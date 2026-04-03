@@ -1,0 +1,2 @@
+set(__QT_DEPLOY_TARGET_high_score_plugin_FILE /home/alisher/logos-snake-game/build/high_score_plugin.so)
+set(__QT_DEPLOY_TARGET_high_score_plugin_TYPE MODULE_LIBRARY)

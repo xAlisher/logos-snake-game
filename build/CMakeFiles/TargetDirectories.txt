@@ -1,0 +1,9 @@
+/home/alisher/logos-snake-game/build/CMakeFiles/high_score_plugin.dir
+/home/alisher/logos-snake-game/build/CMakeFiles/edit_cache.dir
+/home/alisher/logos-snake-game/build/CMakeFiles/rebuild_cache.dir
+/home/alisher/logos-snake-game/build/CMakeFiles/list_install_components.dir
+/home/alisher/logos-snake-game/build/CMakeFiles/install.dir
+/home/alisher/logos-snake-game/build/CMakeFiles/install/local.dir
+/home/alisher/logos-snake-game/build/CMakeFiles/install/strip.dir
+/home/alisher/logos-snake-game/build/CMakeFiles/high_score_plugin_autogen_timestamp_deps.dir
+/home/alisher/logos-snake-game/build/CMakeFiles/high_score_plugin_autogen.dir

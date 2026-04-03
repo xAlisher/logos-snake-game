@@ -1,0 +1,8 @@
+# ninja log v7
+1	186	1775208158503989738	high_score_plugin_autogen/timestamp	ded9f7f2d2577d43
+1	186	1775208158503989738	high_score_plugin_autogen/mocs_compilation.cpp	ded9f7f2d2577d43
+1	186	1775208158503989738	/home/alisher/logos-snake-game/build/high_score_plugin_autogen/timestamp	ded9f7f2d2577d43
+1	186	1775208158503989738	/home/alisher/logos-snake-game/build/high_score_plugin_autogen/mocs_compilation.cpp	ded9f7f2d2577d43
+186	1876	1775208158510989789	CMakeFiles/high_score_plugin.dir/high_score_plugin_autogen/mocs_compilation.cpp.o	6f2e9f8003f2eb15
+186	2334	1775208158510989789	CMakeFiles/high_score_plugin.dir/src/HighScorePlugin.cpp.o	b41516dae66ac009
+2334	2453	1775208160659005180	high_score_plugin.so	101ba09240e882ea

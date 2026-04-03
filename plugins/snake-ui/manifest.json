@@ -1,7 +1,7 @@
 {
   "author": "alisher",
   "category": "games",
-  "dependencies": [],
+  "dependencies": ["high_score"],
   "description": "Snake game — logos-dev-boost pilot",
   "icon": "",
   "main": {

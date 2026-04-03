@@ -6,7 +6,7 @@
   "type": "ui_qml",
   "pluginType": "qml",
   "main": "Main.qml",
-  "dependencies": [],
+  "dependencies": ["high_score"],
   "category": "games",
   "capabilities": [],
   "icon": ""
