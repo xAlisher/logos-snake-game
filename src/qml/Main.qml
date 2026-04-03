@@ -100,7 +100,7 @@ Rectangle {
 
     Timer {
         id: gameTimer
-        interval: 120
+        interval: 200
         running: false
         repeat: true
         onTriggered: root.tick()
