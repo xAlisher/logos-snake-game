@@ -8,17 +8,35 @@
 
 ---
 
-## Critical Top-Level Finding
+## Top-Level Finding: Tooling/Runtime Mismatch
 
-There is a **three-way incompatibility** between the tooling, the public releases, and the working runtime:
+In the environments and releases we tested, we could not validate end-to-end runtime loading of a universal interface module. The tooling, the public releases, and our working runtime each target different interfaces:
 
 | | **logos-dev-boost** (tooling) | **logos-co/logos-basecamp** (GitHub releases) | **Our logos-app** (local Nix build) |
 |---|---|---|---|
-| **Plugin interface** | `LogosProviderBase` (universal/codegen) | Unknown (can't test) | `PluginInterface` (legacy) |
-| **Module discovery** | Assumes file-drop or LGX | Neither works | File-drop works |
+| **Plugin interface** | `LogosProviderBase` (universal/codegen) | Unknown (module discovery blocked) | `PluginInterface` (legacy) |
+| **Module discovery** | Assumes file-drop or LGX | Not observed in releases tested | File-drop works |
 | **Binary name** | N/A | `LogosBasecamp` | `LogosApp` |
 
-**Nobody can run a universal interface module end-to-end right now.** The tooling and runtime are out of sync.
+This may reflect a platform transition in progress rather than a permanent state. We recommend the Basecamp team clarify the current module loading contract.
+
+---
+
+## Evidence Matrix
+
+How each major conclusion was validated:
+
+| Conclusion | Local `logos-app` | Public Basecamp releases | Build-only | Inferred from code/docs |
+|-----------|:-:|:-:|:-:|:-:|
+| Code generator works | | | ✓ | |
+| Nix builder works | | | ✓ | |
+| LGX packaging works | | | ✓ | |
+| AI context files are accurate | | | | ✓ |
+| UI scaffold is broken (IComponent) | | | ✓ | ✓ |
+| Module discovery fails in public releases | | ✓ (tested #80-#111) | | |
+| `LogosProviderBase` incompatible with our runtime | ✓ (logoscore crash) | | | |
+| Pure QML plugin pattern undocumented | | | | ✓ |
+| Snake game QML works | ✓ | | | |
 
 ---
 
@@ -382,39 +400,70 @@ There is a **three-way incompatibility** between the tooling, the public release
 
 ---
 
-## Recommendations for Core Devs
+## Recommendations by Owner
 
-### Immediate Fixes (logos-dev-boost)
-1. **Replace IComponent with PluginInterface** in UI app scaffold and all documentation
-2. **Generate flake.nix and CMakeLists.txt** from scaffold
-3. **Add Node 20.11+ version check** in CLI
-4. **Fix deploy path** in scaffold output
-5. **Fix metadata.json path** in code generator Q_PLUGIN_METADATA
-6. **Fix platform variant naming** — no `-dev` suffix for standard builds
+### Owner: logos-dev-boost team — Priority: High
 
-### Add to logos-dev-boost
-7. **`--type qml-plugin` scaffold** for pure QML UI modules (most common pattern in production)
-8. **Document three plugin patterns** — core module, compiled UI, pure QML UI
-9. **Document CMake variables** from `logos-module-builder` (`LOGOS_CPP_SDK_ROOT`, `LOGOS_MODULE_ROOT`)
-10. **Add QML testing guidance** — logoscore doesn't cover UI testing
-11. **Provide `logos_module()` CMake macro** — mentioned in docs but missing from SDK
+These are bugs/gaps in the tooling that we observed directly:
 
-### Investigate (Basecamp platform)
-12. **Module discovery in public releases** — why don't GitHub releases discover user modules?
-13. **PluginInterface vs LogosProviderBase** — align tooling and runtime interfaces
-14. **logos-app vs logos-basecamp** — which is the canonical build? They behave differently.
+| # | Action | Evidence |
+|---|--------|----------|
+| 1 | Replace IComponent with PluginInterface in UI app scaffold | SDK has no IComponent (build failure) |
+| 2 | Generate flake.nix and CMakeLists.txt from scaffold | Missing from scaffold output |
+| 3 | Add Node 20.11+ version check in CLI | Silent crash on Node 18 |
+| 4 | Fix deploy path in scaffold output | `LogosBasecampDev` doesn't exist |
+| 5 | Fix metadata.json path in code generator | Q_PLUGIN_METADATA can't find it in generated_code/ |
+| 6 | Fix platform variant naming | `-dev` suffix breaks module discovery |
 
-### Adopt Now (for our projects)
-15. **AI context generation** — run `logos-dev-boost install` on keycard-basecamp for AGENTS.md
-16. **Nix flake patterns** — reference for nixpkgs unification, follows declarations
-17. **logoscore patterns** — for future integration testing (once runtime aligned)
+### Owner: logos-dev-boost team — Priority: Medium
+
+Gaps that reduce usability:
+
+| # | Action | Rationale |
+|---|--------|-----------|
+| 7 | Add `--type qml-plugin` scaffold | Pure QML is the most common UI pattern in production |
+| 8 | Document three plugin patterns | core module, compiled UI, pure QML UI all exist |
+| 9 | Document CMake variables (`LOGOS_CPP_SDK_ROOT`, `LOGOS_MODULE_ROOT`) | Developers must discover these manually |
+| 10 | Add QML testing guidance | logoscore only covers core modules |
+| 11 | Provide `logos_module()` CMake macro | Mentioned in docs but not in SDK |
+
+### Owner: Basecamp/platform team — Needs investigation
+
+These may be intentional architecture changes, not bugs. We flag them for clarification:
+
+| # | Question | What we observed |
+|---|----------|------------------|
+| 12 | How should external modules be loaded in public Basecamp releases? | Releases #80-#111 (Mar 22 – Apr 2) did not discover file-dropped or lgpm-installed modules |
+| 13 | What is the current module interface contract? | Tooling generates `LogosProviderBase`, our runtime uses `PluginInterface` |
+| 14 | Which build is canonical — `logos-app` (Nix) or `logos-basecamp` (GitHub)? | They have different binaries, data dirs, and module discovery behavior |
+
+### Owner: Our team (keycard-basecamp) — Adopt now
+
+| # | Action | Value |
+|---|--------|-------|
+| 15 | Run `logos-dev-boost install` on keycard-basecamp | Get AGENTS.md/CLAUDE.md for accurate AI context |
+| 16 | Reference Nix flake patterns | nixpkgs unification, follows declarations |
+| 17 | Prepare for logoscore testing | Patterns ready, blocked on runtime alignment |
 
 ---
 
 ## Conclusion
 
-logos-dev-boost has the right architecture (three-layer AI integration) and strong individual components (code generator, Nix builder, AI context files). But the tooling targets a runtime interface (`LogosProviderBase`) that no available Basecamp can actually load, and the UI scaffold targets an interface (`IComponent`) that doesn't exist in the SDK.
+### What was genuinely validated
+- **Code generator** (`logos-cpp-generator`): parses C++ headers correctly, produces valid Qt glue, integrates into Nix build
+- **Nix builder** (`logos-module-builder`): resolves dependencies, builds modules, produces LGX packages
+- **AI context generation**: comprehensive, accurate documentation that eliminates API hallucination
+- **Pure QML UI plugins**: work in our local `logos-app` runtime (snake game runs)
 
-**The tooling and the runtime are out of sync.** This is not a logos-dev-boost-only problem — it reflects a broader platform transition where the new universal interface architecture exists in the tooling but hasn't landed in the runtime yet.
+### What was blocked
+- **End-to-end runtime loading** of universal interface modules: blocked by interface mismatch (`LogosProviderBase` vs `PluginInterface`) and module discovery differences between builds
+- **Testing via logoscore**: module loads and launches in `logos_host` but crashes due to interface mismatch
+- **Testing via public Basecamp releases**: module discovery not observed in any tested release (#80-#111)
 
-For keycard-basecamp: continue with `PluginInterface` + our local Nix build. Adopt AI context generation now. Re-evaluate universal interface when runtime and tooling align.
+### What this means
+The pilot produced both real tooling wins and real platform blockers. The blockers are not logos-dev-boost bugs — they reflect a broader platform transition where the universal interface exists in the tooling but has not yet been validated against a matching runtime.
+
+### For keycard-basecamp
+- **Now:** Adopt AI context generation (AGENTS.md/CLAUDE.md)
+- **Now:** Continue with `PluginInterface` + our local Nix build
+- **Later:** Re-evaluate universal interface when platform team confirms runtime alignment
