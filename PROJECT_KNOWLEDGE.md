@@ -3,6 +3,21 @@
 ## Purpose
 Snake game module built using logos-dev-boost tooling to evaluate the full development pipeline. Findings documented here for the comprehensive report to Logos core devs.
 
+## CRITICAL: Three-Way Incompatibility (Top-Level Finding)
+
+| | **logos-dev-boost** (tooling) | **logos-co/logos-basecamp** (GitHub releases) | **Our logos-app** (local Nix build) |
+|---|---|---|---|
+| **Plugin interface** | `LogosProviderBase` (universal/codegen) | Unknown (no file-drop, can't test) | `PluginInterface` (legacy) |
+| **Module discovery** | Assumes file-drop or LGX | Neither works | File-drop works |
+| **Binary name** | N/A | `LogosBasecamp` | `LogosApp` |
+
+**Nobody can actually run a universal interface module right now** unless they have a specific matching runtime build:
+- logos-dev-boost generates code targeting `LogosProviderBase`
+- Latest Basecamp releases don't discover any user modules at all
+- Our working Basecamp discovers modules but uses old `PluginInterface`, so generated code crashes
+
+The tooling and the runtime are out of sync. This is the most important finding for core devs.
+
 ---
 
 ## Finding #1: Node 18 Incompatible
