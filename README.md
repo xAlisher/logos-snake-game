@@ -1,5 +1,8 @@
 # logos-snake-game
 
+> This is a personal, experimental hobby project. It is not an official Logos product. Not audited.
+
+
 A Snake game module for Logos Basecamp, built as a **logos-dev-boost evaluation pilot**.
 
 ![Snake game running in Logos Basecamp](screenshot.png)
